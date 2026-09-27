@@ -8,7 +8,6 @@ import {
   deleteDoc,
   onSnapshot,
   query,
-  orderBy,
   Unsubscribe,
 } from 'firebase/firestore';
 import {
@@ -16,7 +15,6 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signOut,
-  onAuthStateChanged,
   User,
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json' with { type: 'json' };
@@ -47,7 +45,6 @@ export function subscribeToTransactions(
   onError?: (err: Error) => void
 ): Unsubscribe {
   const collectionRef = collection(db, COLLECTION_NAME);
-  // Order by tanggal descending then createdAt descending
   const q = query(collectionRef);
 
   return onSnapshot(
@@ -61,7 +58,9 @@ export function subscribeToTransactions(
           tanggal: data.tanggal || '',
           nipSales: data.nipSales || '',
           namaSales: data.namaSales || '',
+          namaPS: data.namaPS || '',
           namaCustomer: data.namaCustomer || '',
+          teleponCustomer: data.teleponCustomer || '',
           jenisTransaksi: data.jenisTransaksi || 'LUNAS',
           approvalStatus: data.approvalStatus || 'Pending',
           approvedBy: data.approvedBy,
@@ -106,7 +105,9 @@ export async function saveLiveTransaction(item: Transaction): Promise<void> {
     tanggal: item.tanggal,
     nipSales: item.nipSales,
     namaSales: item.namaSales,
+    namaPS: item.namaPS || '',
     namaCustomer: item.namaCustomer,
+    teleponCustomer: item.teleponCustomer || '',
     jenisTransaksi: item.jenisTransaksi,
     approvalStatus: item.approvalStatus,
     nilaiSebelum: item.nilaiSebelum,

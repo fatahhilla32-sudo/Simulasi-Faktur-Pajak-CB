@@ -8,7 +8,9 @@ export interface Transaction {
   tanggal: string; // YYYY-MM-DD
   nipSales: string;
   namaSales: string;
+  namaPS: string; // Nama PS (Project Sales / Product Specialist)
   namaCustomer: string;
+  teleponCustomer: string; // No. Telepon / WhatsApp Customer
   jenisTransaksi: JenisTransaksi; // 'DP' | 'LUNAS'
   approvalStatus: ApprovalStatus; // 'Approved' | 'Not Approved' | 'Pending'
   approvedBy?: string;
@@ -42,7 +44,9 @@ export type SortField =
   | 'tanggal'
   | 'nipSales'
   | 'namaSales'
+  | 'namaPS'
   | 'namaCustomer'
+  | 'teleponCustomer'
   | 'jenisTransaksi'
   | 'approvalStatus'
   | 'nilaiSebelum'

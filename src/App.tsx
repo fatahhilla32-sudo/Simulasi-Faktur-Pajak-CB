@@ -131,13 +131,15 @@ export default function App() {
   // Filtered transactions
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
-      // 1. Search text (NIP, Sales, Customer)
+      // 1. Search text (NIP, Sales, PS, Customer, Phone)
       if (filters.search.trim()) {
         const query = filters.search.toLowerCase().trim();
         const nipMatch = t.nipSales.toLowerCase().includes(query);
         const salesMatch = t.namaSales.toLowerCase().includes(query);
+        const psMatch = (t.namaPS || '').toLowerCase().includes(query);
         const customerMatch = t.namaCustomer.toLowerCase().includes(query);
-        if (!nipMatch && !salesMatch && !customerMatch) {
+        const phoneMatch = (t.teleponCustomer || '').toLowerCase().includes(query);
+        if (!nipMatch && !salesMatch && !psMatch && !customerMatch && !phoneMatch) {
           return false;
         }
       }
@@ -215,7 +217,9 @@ export default function App() {
       tanggal: formData.tanggal,
       nipSales: formData.nipSales,
       namaSales: formData.namaSales,
+      namaPS: formData.namaPS || '',
       namaCustomer: formData.namaCustomer,
+      teleponCustomer: formData.teleponCustomer || '',
       jenisTransaksi: formData.jenisTransaksi || 'LUNAS',
       approvalStatus: isApproverActive
         ? formData.approvalStatus || 'Pending'

@@ -14,7 +14,7 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Filter,
+  Phone,
 } from 'lucide-react';
 import {
   Transaction,
@@ -197,7 +197,7 @@ export function TransactionTable({
               )}
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Menampilkan {filteredTransactions.length} dari total {transactions.length} transaksi tercatat
+              Menampilkan {filteredTransactions.length} dari total {transactions.length} transaksi tercatat secara live
             </p>
           </div>
 
@@ -222,7 +222,7 @@ export function TransactionTable({
             </div>
             <input
               type="text"
-              placeholder="Cari NIP, Sales, atau Customer..."
+              placeholder="Cari NIP, Sales, PS, Customer, No Telp..."
               value={filters.search}
               onChange={(e) => {
                 onFilterChange({ ...filters, search: e.target.value });
@@ -394,6 +394,17 @@ export function TransactionTable({
                 </div>
               </th>
 
+              {/* Column: Nama PS */}
+              <th
+                onClick={() => handleSort('namaPS')}
+                className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap"
+              >
+                <div className="flex items-center gap-1">
+                  <span>Nama PS</span>
+                  {renderSortIndicator('namaPS')}
+                </div>
+              </th>
+
               <th
                 onClick={() => handleSort('namaCustomer')}
                 className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap"
@@ -401,6 +412,17 @@ export function TransactionTable({
                 <div className="flex items-center gap-1">
                   <span>Nama Customer</span>
                   {renderSortIndicator('namaCustomer')}
+                </div>
+              </th>
+
+              {/* Column: Nomor Telepon Customer */}
+              <th
+                onClick={() => handleSort('teleponCustomer')}
+                className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap"
+              >
+                <div className="flex items-center gap-1">
+                  <span>No. Telp Customer</span>
+                  {renderSortIndicator('teleponCustomer')}
                 </div>
               </th>
 
@@ -475,7 +497,7 @@ export function TransactionTable({
           <tbody className="divide-y divide-slate-100 text-slate-700">
             {paginatedData.length === 0 ? (
               <tr>
-                <td colSpan={13} className="py-12 text-center text-slate-500">
+                <td colSpan={15} className="py-12 text-center text-slate-500">
                   <div className="max-w-sm mx-auto flex flex-col items-center">
                     <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
                       <Search className="w-5 h-5" />
@@ -538,9 +560,38 @@ export function TransactionTable({
                       {item.namaSales}
                     </td>
 
+                    {/* Nama PS */}
+                    <td className="py-3.5 px-3 whitespace-nowrap font-medium text-slate-700">
+                      {item.namaPS ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200 font-medium text-[11px]">
+                          {item.namaPS}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">-</span>
+                      )}
+                    </td>
+
                     {/* Nama Customer */}
                     <td className="py-3.5 px-3 text-slate-800 font-medium max-w-[180px] truncate" title={item.namaCustomer}>
                       {item.namaCustomer}
+                    </td>
+
+                    {/* No. Telepon Customer */}
+                    <td className="py-3.5 px-3 whitespace-nowrap font-mono text-slate-700">
+                      {item.teleponCustomer ? (
+                        <a
+                          href={`https://wa.me/${item.teleponCustomer.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 transition-colors"
+                          title="Hubungi via WhatsApp / Telepon"
+                        >
+                          <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <span>{item.teleponCustomer}</span>
+                        </a>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">-</span>
+                      )}
                     </td>
 
                     {/* Jenis (DP / LUNAS) */}
@@ -574,7 +625,7 @@ export function TransactionTable({
                                 ? 'bg-rose-50 text-rose-800 border-rose-300 focus:ring-rose-500'
                                 : 'bg-amber-50 text-amber-800 border-amber-300 focus:ring-amber-500'
                             }`}
-                            title={`Klik untuk mengubah status approval (Approver: ${AUTHORIZED_APPROVER_EMAIL})`}
+                            title={`Ubah status approval (Approver: ${AUTHORIZED_APPROVER_EMAIL})`}
                           >
                             <option value="Pending">Pending</option>
                             <option value="Approved">Approved</option>

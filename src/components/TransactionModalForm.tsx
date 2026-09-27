@@ -52,7 +52,9 @@ export function TransactionModalForm({
   const [tanggal, setTanggal] = useState<string>(getTodayDateString());
   const [nipSales, setNipSales] = useState<string>('');
   const [namaSales, setNamaSales] = useState<string>('');
+  const [namaPS, setNamaPS] = useState<string>('');
   const [namaCustomer, setNamaCustomer] = useState<string>('');
+  const [teleponCustomer, setTeleponCustomer] = useState<string>('');
   const [jenisTransaksi, setJenisTransaksi] = useState<JenisTransaksi>('LUNAS');
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus>('Pending');
   const [rawSebelum, setRawSebelum] = useState<string>('');
@@ -81,7 +83,9 @@ export function TransactionModalForm({
         setTanggal(editData.tanggal);
         setNipSales(editData.nipSales);
         setNamaSales(editData.namaSales);
+        setNamaPS(editData.namaPS || '');
         setNamaCustomer(editData.namaCustomer);
+        setTeleponCustomer(editData.teleponCustomer || '');
         setJenisTransaksi(editData.jenisTransaksi || 'LUNAS');
         setApprovalStatus(editData.approvalStatus || 'Pending');
         setRawSebelum(formatRupiahInputValue(editData.nilaiSebelum));
@@ -96,7 +100,9 @@ export function TransactionModalForm({
         setTanggal(getTodayDateString());
         setNipSales('');
         setNamaSales('');
+        setNamaPS('');
         setNamaCustomer('');
+        setTeleponCustomer('');
         setJenisTransaksi('LUNAS');
         setApprovalStatus('Pending');
         setRawSebelum('');
@@ -225,7 +231,9 @@ export function TransactionModalForm({
         tanggal,
         nipSales: nipSales.trim(),
         namaSales: namaSales.trim(),
+        namaPS: namaPS.trim(),
         namaCustomer: namaCustomer.trim(),
+        teleponCustomer: teleponCustomer.trim(),
         jenisTransaksi,
         approvalStatus: isApprover ? approvalStatus : (editData?.approvalStatus || 'Pending'),
         approvedBy: isApprover && approvalStatus !== 'Pending' ? AUTHORIZED_APPROVER_EMAIL : editData?.approvedBy,
@@ -262,7 +270,7 @@ export function TransactionModalForm({
                 {editData ? 'Edit Data Transaksi FP + CB' : 'Input Transaksi FP + CB Baru'}
               </h2>
               <p className="text-xs text-slate-400">
-                Lengkapi seluruh formulir dengan data transaksi yang valid
+                Lengkapi formulir transaksi dan bukti foto faktur & cashback
               </p>
             </div>
           </div>
@@ -326,7 +334,7 @@ export function TransactionModalForm({
             </div>
           </div>
 
-          {/* Row 2: Nama Sales & Nama Customer */}
+          {/* Row 2: Nama Sales & Nama PS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -352,6 +360,23 @@ export function TransactionModalForm({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Nama PS <span className="text-slate-400 font-normal">(Project Sales / Specialist)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Contoh: Budi Santoso / PS Area"
+                value={namaPS}
+                onChange={(e) => setNamaPS(e.target.value)}
+                className="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-colors"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">Nama person Project Sales terkait</p>
+            </div>
+          </div>
+
+          {/* Row 3: Nama Customer & Nomor Telepon Customer */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Nama Customer <span className="text-rose-500">*</span>
               </label>
               <input
@@ -371,9 +396,23 @@ export function TransactionModalForm({
                 <p className="text-[11px] text-rose-500 mt-1">{errors.namaCustomer}</p>
               )}
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Nomor Telepon Customer <span className="text-slate-400 font-normal">(WhatsApp / HP)</span>
+              </label>
+              <input
+                type="tel"
+                placeholder="Contoh: 081234567890"
+                value={teleponCustomer}
+                onChange={(e) => setTeleponCustomer(e.target.value)}
+                className="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-mono transition-colors"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">Nomor kontak pemesan/customer</p>
+            </div>
           </div>
 
-          {/* Row 3: Jenis Transaksi (DP / LUNAS) & Approval Status */}
+          {/* Row 4: Jenis Transaksi (DP / LUNAS) & Approval Status */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -433,7 +472,7 @@ export function TransactionModalForm({
             </div>
           </div>
 
-          {/* Row 4: Nilai Sebelum & Sesudah */}
+          {/* Row 5: Nilai Sebelum & Sesudah */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -485,7 +524,7 @@ export function TransactionModalForm({
             </div>
           </div>
 
-          {/* Row 5: Total Benefit (Read Only & Calculated Automatically) */}
+          {/* Row 6: Total Benefit (Read Only & Calculated Automatically) */}
           <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="text-xs font-semibold text-blue-900 mb-0.5">
@@ -506,7 +545,7 @@ export function TransactionModalForm({
             </div>
           </div>
 
-          {/* Row 6: Upload Foto Bukti FP + CB */}
+          {/* Row 7: Upload Foto Bukti FP + CB */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-xs font-semibold text-slate-700">

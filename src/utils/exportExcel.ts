@@ -14,7 +14,9 @@ export function exportTransactionsToExcel(transactions: Transaction[], filenameS
     'Tanggal (Format)': formatTanggalIndo(t.tanggal),
     'NIP Sales': t.nipSales,
     'Nama Sales': t.namaSales,
+    'Nama PS': t.namaPS || '-',
     'Nama Customer': t.namaCustomer,
+    'No. Telp Customer': t.teleponCustomer || '-',
     'Jenis Transaksi': t.jenisTransaksi || 'LUNAS',
     'Status Approval': t.approvalStatus || 'Pending',
     'Disetujui Oleh': t.approvedBy || '-',
@@ -34,7 +36,9 @@ export function exportTransactionsToExcel(transactions: Transaction[], filenameS
     { wch: 18 }, // Tanggal format
     { wch: 14 }, // NIP Sales
     { wch: 22 }, // Nama Sales
+    { wch: 22 }, // Nama PS
     { wch: 28 }, // Nama Customer
+    { wch: 20 }, // No. Telp Customer
     { wch: 16 }, // Jenis Transaksi
     { wch: 18 }, // Status Approval
     { wch: 32 }, // Disetujui Oleh
