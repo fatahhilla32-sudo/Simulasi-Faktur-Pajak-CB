@@ -1,5 +1,4 @@
-import { Transaction, JenisTransaksi, ApprovalStatus } from '../types';
-import { createSampleInvoiceImage } from '../utils/imageCompressor';
+import { Transaction, ApprovalStatus } from '../types';
 
 const DB_NAME = 'fpcb_monitoring_system';
 const DB_VERSION = 2;
@@ -47,7 +46,7 @@ function openDatabase(): Promise<IDBDatabase> {
 }
 
 /**
- * Get all transactions from IndexedDB with normalization for legacy records
+ * Get all transactions from IndexedDB
  */
 export async function getAllTransactions(): Promise<Transaction[]> {
   const db = await openDatabase();
@@ -58,11 +57,10 @@ export async function getAllTransactions(): Promise<Transaction[]> {
 
     request.onsuccess = () => {
       const results = (request.result as Transaction[]) || [];
-      // Normalize any older records that might not have new fields
-      const normalized = results.map((item, idx) => ({
+      const normalized = results.map((item) => ({
         ...item,
-        jenisTransaksi: item.jenisTransaksi || (idx % 3 === 0 ? 'DP' : 'LUNAS'),
-        approvalStatus: item.approvalStatus || (idx % 2 === 0 ? 'Approved' : 'Pending'),
+        jenisTransaksi: item.jenisTransaksi || 'LUNAS',
+        approvalStatus: item.approvalStatus || 'Pending',
       }));
 
       // Sort newest by date then createdAt
@@ -173,145 +171,8 @@ export async function clearAllTransactions(): Promise<void> {
 }
 
 /**
- * Initial seed data generator with realistic Indonesian transactions
+ * Initialize data without any seed sample data
  */
-export async function seedInitialDataIfEmpty(): Promise<Transaction[]> {
-  const current = await getAllTransactions();
-  if (current.length > 0) {
-    return current;
-  }
-
-  const now = new Date();
-  const getPastDate = (daysAgo: number) => {
-    const d = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
-
-  const sampleRows: Array<{
-    nip: string;
-    sales: string;
-    customer: string;
-    sebelum: number;
-    sesudah: number;
-    tanggal: string;
-    jenis: JenisTransaksi;
-    approval: ApprovalStatus;
-  }> = [
-    {
-      nip: 'SLS-8801',
-      sales: 'Rian Hidayat',
-      customer: 'PT Surya Makmur Abadi',
-      sebelum: 125000000,
-      sesudah: 110000000,
-      tanggal: getPastDate(1),
-      jenis: 'LUNAS',
-      approval: 'Approved',
-    },
-    {
-      nip: 'SLS-8802',
-      sales: 'Dewi Lestari',
-      customer: 'CV Sumber Rejeki Tehnik',
-      sebelum: 78500000,
-      sesudah: 70000000,
-      tanggal: getPastDate(3),
-      jenis: 'DP',
-      approval: 'Pending',
-    },
-    {
-      nip: 'SLS-8801',
-      sales: 'Rian Hidayat',
-      customer: 'PT Indo Sentosa Prima',
-      sebelum: 210000000,
-      sesudah: 189000000,
-      tanggal: getPastDate(6),
-      jenis: 'LUNAS',
-      approval: 'Approved',
-    },
-    {
-      nip: 'SLS-8803',
-      sales: 'Bambang Prasetyo',
-      customer: 'PT Mandiri Jaya Nusantara',
-      sebelum: 95000000,
-      sesudah: 83500000,
-      tanggal: getPastDate(10),
-      jenis: 'DP',
-      approval: 'Not Approved',
-    },
-    {
-      nip: 'SLS-8804',
-      sales: 'Siti Rahmawati',
-      customer: 'PT Berkah Cipta Logistik',
-      sebelum: 145000000,
-      sesudah: 130500000,
-      tanggal: getPastDate(14),
-      jenis: 'LUNAS',
-      approval: 'Approved',
-    },
-    {
-      nip: 'SLS-8802',
-      sales: 'Dewi Lestari',
-      customer: 'PT Kencana Mega Pratama',
-      sebelum: 160000000,
-      sesudah: 144000000,
-      tanggal: getPastDate(18),
-      jenis: 'LUNAS',
-      approval: 'Pending',
-    },
-    {
-      nip: 'SLS-8803',
-      sales: 'Bambang Prasetyo',
-      customer: 'PT Prima Niaga Utama',
-      sebelum: 65000000,
-      sesudah: 58500000,
-      tanggal: getPastDate(25),
-      jenis: 'DP',
-      approval: 'Approved',
-    },
-  ];
-
-  const seeded: Transaction[] = [];
-
-  for (let i = 0; i < sampleRows.length; i++) {
-    const row = sampleRows[i];
-    const benefit = row.sebelum - row.sesudah;
-    const persen = (benefit / row.sebelum) * 100;
-    const invoiceDoc = `INV-FP/2026/09/${String(i + 101).padStart(4, '0')}`;
-    const foto = createSampleInvoiceImage(
-      invoiceDoc,
-      row.customer,
-      row.sales,
-      row.sebelum,
-      row.sesudah,
-      benefit
-    );
-
-    const item: Transaction = {
-      id: `trx-${Date.now()}-${i}`,
-      tanggal: row.tanggal,
-      nipSales: row.nip,
-      namaSales: row.sales,
-      namaCustomer: row.customer,
-      jenisTransaksi: row.jenis,
-      approvalStatus: row.approval,
-      approvedBy: row.approval !== 'Pending' ? 'fatah.mubarokah@homecenter.co.id' : undefined,
-      approvedAt: row.approval !== 'Pending' ? Date.now() - (i * 86400000) : undefined,
-      nilaiSebelum: row.sebelum,
-      nilaiSesudah: row.sesudah,
-      totalBenefit: benefit,
-      persenBenefit: persen,
-      fotoData: foto,
-      fotoFileName: `faktur_${row.nip}_${i + 1}.jpg`,
-      fotoFileSize: 145000,
-      createdAt: Date.now() - (i * 86400000),
-      updatedAt: Date.now() - (i * 86400000),
-    };
-
-    await saveTransaction(item);
-    seeded.push(item);
-  }
-
-  return seeded;
+export async function initTransactions(): Promise<Transaction[]> {
+  return await getAllTransactions();
 }

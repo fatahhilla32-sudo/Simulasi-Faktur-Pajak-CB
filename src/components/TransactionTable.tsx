@@ -42,6 +42,7 @@ interface TransactionTableProps {
   onExportExcel: () => void;
   currentUserEmail: string;
   onApprovalChange: (id: string, status: ApprovalStatus) => Promise<void>;
+  onOpenCreateModal: () => void;
 }
 
 export function TransactionTable({
@@ -56,6 +57,7 @@ export function TransactionTable({
   onExportExcel,
   currentUserEmail,
   onApprovalChange,
+  onOpenCreateModal,
 }: TransactionTableProps) {
   const isApprover =
     currentUserEmail.trim().toLowerCase() === AUTHORIZED_APPROVER_EMAIL.toLowerCase();
@@ -481,17 +483,24 @@ export function TransactionTable({
                     <p className="text-sm font-semibold text-slate-700 mb-1">
                       Tidak Ada Data Transaksi
                     </p>
-                    <p className="text-xs text-slate-500 leading-relaxed mb-3">
+                    <p className="text-xs text-slate-500 leading-relaxed mb-4 text-center">
                       {isFilterActive
                         ? 'Tidak ditemukan data yang sesuai dengan filter pencarian Anda.'
-                        : 'Belum ada transaksi FP & Cashback yang dicatat.'}
+                        : 'Belum ada transaksi FP & Cashback yang dicatat. Siapapun dapat menginput data transaksi.'}
                     </p>
-                    {isFilterActive && (
+                    {isFilterActive ? (
                       <button
                         onClick={onResetFilters}
                         className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 rounded-lg transition-colors"
                       >
                         Reset Filter
+                      </button>
+                    ) : (
+                      <button
+                        onClick={onOpenCreateModal}
+                        className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors shadow-xs"
+                      >
+                        <span>Input Transaksi Pertama</span>
                       </button>
                     )}
                   </div>

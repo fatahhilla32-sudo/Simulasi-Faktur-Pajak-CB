@@ -397,11 +397,11 @@ export function TransactionModalForm({
                 </label>
                 {isApprover ? (
                   <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    <ShieldCheck className="w-3 h-3" /> Approver Resmi
+                    <ShieldCheck className="w-3 h-3" /> Approver Aktif
                   </span>
                 ) : (
                   <span className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
-                    <Lock className="w-3 h-3" /> Terkunci
+                    <Lock className="w-3 h-3" /> Otomatis Pending
                   </span>
                 )}
               </div>
@@ -417,19 +417,18 @@ export function TransactionModalForm({
                   <option value="Not Approved">Not Approved (Ditolak)</option>
                 </select>
               ) : (
-                <div className="w-full px-3.5 py-2 text-sm bg-slate-100 border border-slate-300 rounded-lg text-slate-700 font-medium flex items-center justify-between">
-                  <span>
-                    {approvalStatus === 'Approved'
-                      ? 'Approved (Disetujui)'
-                      : approvalStatus === 'Not Approved'
-                      ? 'Not Approved (Ditolak)'
-                      : 'Menunggu Approval (Pending)'}
+                <div className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-medium flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-slate-700">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                    Menunggu Approval (Pending)
                   </span>
-                  <span className="text-[11px] text-slate-500 font-normal">Hanya Approver</span>
+                  <span className="text-[11px] text-slate-400">Verifikasi Approver</span>
                 </div>
               )}
               <p className="text-[10px] text-slate-500 mt-1">
-                Akses perubahan persetujuan: <span className="font-mono text-slate-700">{AUTHORIZED_APPROVER_EMAIL}</span>
+                {isApprover
+                  ? 'Anda memiliki hak untuk menentukan status persetujuan transaksi ini.'
+                  : `Approval akan diproses oleh approver (${AUTHORIZED_APPROVER_EMAIL}).`}
               </p>
             </div>
           </div>

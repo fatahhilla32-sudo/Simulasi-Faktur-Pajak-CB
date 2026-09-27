@@ -14,7 +14,6 @@ import {
   deleteTransaction,
   updateTransactionApproval,
   getSalesDirectory,
-  seedInitialDataIfEmpty,
   clearAllTransactions,
 } from './services/db';
 import { Navbar } from './components/Navbar';
@@ -32,18 +31,18 @@ export default function App() {
   const [salesDirectory, setSalesDirectory] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // User identity: default to the authorized approver email
+  // User identity: default to general user ("user.umum@homecenter.co.id"), or remembered preference
   const [currentUserEmail, setCurrentUserEmail] = useState<string>(() => {
-    return localStorage.getItem('fpcb_current_user') || AUTHORIZED_APPROVER_EMAIL;
+    return localStorage.getItem('fpcb_current_user') || 'user.umum@homecenter.co.id';
   });
 
   const handleUserEmailChange = (newEmail: string) => {
     setCurrentUserEmail(newEmail);
     localStorage.setItem('fpcb_current_user', newEmail);
     if (newEmail.trim().toLowerCase() === AUTHORIZED_APPROVER_EMAIL.toLowerCase()) {
-      addToast(`Masuk sebagai Approver Resmi (${AUTHORIZED_APPROVER_EMAIL}). Anda memiliki akses penuh persetujuan.`, 'success');
+      addToast(`Akses Approver Aktif (${AUTHORIZED_APPROVER_EMAIL}). Anda memiliki hak akses approval.`, 'success');
     } else {
-      addToast(`Masuk sebagai ${newEmail}. Hak akses persetujuan dinonaktifkan (Read-only).`, 'info');
+      addToast(`Mode User Umum aktif. Anda dapat menginput transaksi (Status approval hanya dapat diubah oleh approver).`, 'info');
     }
   };
 
@@ -80,11 +79,17 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // Load initial data
+  // Load initial data (clean empty state, clearing out any previous sample seed data)
   const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const items = await seedInitialDataIfEmpty();
+      // Clean previous dummy sample data as requested by the user
+      if (localStorage.getItem('fpcb_cleared_samples_v4') !== 'true') {
+        await clearAllTransactions();
+        localStorage.setItem('fpcb_cleared_samples_v4', 'true');
+      }
+
+      const items = await getAllTransactions();
       setTransactions(items);
       const dir = await getSalesDirectory();
       setSalesDirectory(dir);
@@ -174,11 +179,14 @@ export default function App() {
     };
   }, [filteredTransactions]);
 
-  // Form Submit (Create or Update)
+  // Form Submit - CAN BE DONE BY ANYONE (USER UMUM / SALES)
   const handleSaveTransaction = async (formData: TransactionFormData) => {
     const totalBenefit = formData.nilaiSebelum - formData.nilaiSesudah;
     const persenBenefit = formData.nilaiSebelum > 0 ? (totalBenefit / formData.nilaiSebelum) * 100 : 0;
     const now = Date.now();
+
+    const isApprover =
+      currentUserEmail.trim().toLowerCase() === AUTHORIZED_APPROVER_EMAIL.toLowerCase();
 
     const isEdit = Boolean(formData.id);
     const itemToSave: Transaction = {
@@ -188,9 +196,20 @@ export default function App() {
       namaSales: formData.namaSales,
       namaCustomer: formData.namaCustomer,
       jenisTransaksi: formData.jenisTransaksi || 'LUNAS',
-      approvalStatus: formData.approvalStatus || 'Pending',
-      approvedBy: formData.approvedBy,
-      approvedAt: formData.approvedAt,
+      // If creator is not approver, new records naturally start as Pending
+      approvalStatus: isApprover
+        ? formData.approvalStatus || 'Pending'
+        : isEdit && editingTransaction
+        ? editingTransaction.approvalStatus
+        : 'Pending',
+      approvedBy:
+        isApprover && formData.approvalStatus && formData.approvalStatus !== 'Pending'
+          ? AUTHORIZED_APPROVER_EMAIL
+          : editingTransaction?.approvedBy,
+      approvedAt:
+        isApprover && formData.approvalStatus && formData.approvalStatus !== 'Pending'
+          ? now
+          : editingTransaction?.approvedAt,
       nilaiSebelum: formData.nilaiSebelum,
       nilaiSesudah: formData.nilaiSesudah,
       totalBenefit,
@@ -215,17 +234,17 @@ export default function App() {
 
     addToast(
       isEdit
-        ? `Transaksi untuk ${itemToSave.namaCustomer} berhasil diperbarui.`
+        ? `Transaksi ${itemToSave.namaCustomer} berhasil diperbarui.`
         : `Transaksi baru untuk ${itemToSave.namaCustomer} (${itemToSave.jenisTransaksi}) berhasil disimpan!`,
       'success'
     );
   };
 
-  // Immediate approval change handler for authorized user
+  // Immediate approval change handler - RESTRICTED STRICTLY TO fatah.mubarokah@homecenter.co.id
   const handleApprovalChange = async (id: string, newStatus: ApprovalStatus) => {
     if (currentUserEmail.trim().toLowerCase() !== AUTHORIZED_APPROVER_EMAIL.toLowerCase()) {
       addToast(
-        `Akses ditolak! Hanya email ${AUTHORIZED_APPROVER_EMAIL} yang dapat memilih atau mengubah status approval.`,
+        `Akses ditolak! Hanya email ${AUTHORIZED_APPROVER_EMAIL} yang berhak melakukan approval transaksi.`,
         'error'
       );
       return;
@@ -235,7 +254,7 @@ export default function App() {
       await updateTransactionApproval(id, newStatus, currentUserEmail);
       const updatedList = await getAllTransactions();
       setTransactions(updatedList);
-      addToast(`Status transaksi berhasil diubah menjadi: ${newStatus}`, 'success');
+      addToast(`Status approval berhasil diubah menjadi: ${newStatus}`, 'success');
     } catch (err) {
       console.error(err);
       addToast('Gagal mengubah status approval.', 'error');
@@ -282,24 +301,22 @@ export default function App() {
     }
   };
 
-  // Reset seed data
-  const handleResetSeedData = async () => {
-    const confirmReset = window.confirm(
-      'Apakah Anda ingin mereset dan memuat ulang data demonstrasi transaksi FP + CB?'
+  // Clear all data manually
+  const handleClearAllData = async () => {
+    const confirmClear = window.confirm(
+      'Apakah Anda yakin ingin menghapus seluruh data transaksi yang tersimpan di sistem?'
     );
-    if (!confirmReset) return;
+    if (!confirmClear) return;
 
     try {
       setIsLoading(true);
       await clearAllTransactions();
-      const fresh = await seedInitialDataIfEmpty();
-      setTransactions(fresh);
-      const dir = await getSalesDirectory();
-      setSalesDirectory(dir);
-      addToast('Data sampel demonstrasi berhasil dimuat ulang.', 'success');
+      setTransactions([]);
+      setSalesDirectory({});
+      addToast('Seluruh data transaksi berhasil dikosongkan.', 'info');
     } catch (err) {
       console.error(err);
-      addToast('Gagal memuat ulang data demonstrasi.', 'error');
+      addToast('Gagal mengosongkan data transaksi.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -313,7 +330,7 @@ export default function App() {
           setEditingTransaction(null);
           setIsModalFormOpen(true);
         }}
-        onResetSeedData={handleResetSeedData}
+        onClearAllData={handleClearAllData}
         totalRecords={transactions.length}
         currentUserEmail={currentUserEmail}
         onUserEmailChange={handleUserEmailChange}
@@ -321,19 +338,20 @@ export default function App() {
 
       {/* Main Workspace Canvas */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
-        {/* Page Hero Title & Quick Metric Kicker */}
+        {/* Page Hero Title & Info */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200/80 pb-5">
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">
-              <span>Modul Finance & Commercial Control</span>
+              <span>Commercial & Finance Control</span>
               <span>·</span>
-              <span>Audit Potongan Diskon</span>
+              <span>Monitoring FP & Cashback</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
               Monitoring Discount Faktur Pajak (FP) + Cashback (CB)
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-              Catat, verifikasi bukti foto faktur, pantau jenis transaksi (DP/LUNAS), dan proses persetujuan (Approved/Not Approved) secara akurat.
+              Pencatatan terbuka untuk seluruh sales & user umum. Otorisasi persetujuan potongan nilai benefit khusus oleh{' '}
+              <span className="font-semibold text-slate-800">{AUTHORIZED_APPROVER_EMAIL}</span>.
             </p>
           </div>
 
@@ -368,8 +386,6 @@ export default function App() {
               <SummaryCards stats={summaryStats} />
             </section>
 
-            {/* Note: Charts have been removed as per user request ("dibagian atas, tolong hilangkan saja diagram chart dan diagram tren") */}
-
             {/* 2. Transaction Data Table */}
             <section aria-label="Tabel Transaksi">
               <TransactionTable
@@ -400,6 +416,10 @@ export default function App() {
                 onExportExcel={handleExportExcel}
                 currentUserEmail={currentUserEmail}
                 onApprovalChange={handleApprovalChange}
+                onOpenCreateModal={() => {
+                  setEditingTransaction(null);
+                  setIsModalFormOpen(true);
+                }}
               />
             </section>
           </>
@@ -414,7 +434,7 @@ export default function App() {
             <span className="font-mono text-slate-700 font-semibold">{AUTHORIZED_APPROVER_EMAIL}</span>
           </span>
           <div className="flex items-center gap-4 text-[11px] text-slate-500">
-            <span>Penyimpanan Persisten IndexedDB</span>
+            <span>Penyimpanan Persisten Browser</span>
             <span>·</span>
             <span>Format Ekspor .xlsx</span>
           </div>
