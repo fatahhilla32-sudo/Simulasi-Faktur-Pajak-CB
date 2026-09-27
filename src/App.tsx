@@ -25,12 +25,38 @@ import { PhotoLightboxModal } from './components/PhotoLightboxModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { ToastNotification } from './components/ToastNotification';
 import { exportTransactionsToExcel } from './utils/exportExcel';
-import { Plus, Radio } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 export default function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Active approver email (from Google auth or verified approver session)
+  const [activeApproverEmail, setActiveApproverEmail] = useState<string | null>(() => {
+    return sessionStorage.getItem('fpcb_active_approver') || null;
+  });
+
+  const handleSetApproverEmail = (email: string | null) => {
+    setActiveApproverEmail(email);
+    if (email) {
+      sessionStorage.setItem('fpcb_active_approver', email);
+    } else {
+      sessionStorage.removeItem('fpcb_active_approver');
+    }
+  };
+
+  const effectiveApproverEmail = useMemo(() => {
+    if (currentUser && isAuthorizedApprover(currentUser.email)) {
+      return currentUser.email;
+    }
+    if (isAuthorizedApprover(activeApproverEmail)) {
+      return activeApproverEmail;
+    }
+    return currentUser?.email || null;
+  }, [currentUser, activeApproverEmail]);
+
+  const isApproverActive = isAuthorizedApprover(effectiveApproverEmail);
 
   // Modals & Active items
   const [isModalFormOpen, setIsModalFormOpen] = useState<boolean>(false);
@@ -182,7 +208,6 @@ export default function App() {
     const persenBenefit = formData.nilaiSebelum > 0 ? (totalBenefit / formData.nilaiSebelum) * 100 : 0;
     const now = Date.now();
 
-    const isApprover = isAuthorizedApprover(currentUser?.email);
     const isEdit = Boolean(formData.id);
 
     const itemToSave: Transaction = {
@@ -192,18 +217,17 @@ export default function App() {
       namaSales: formData.namaSales,
       namaCustomer: formData.namaCustomer,
       jenisTransaksi: formData.jenisTransaksi || 'LUNAS',
-      // If creator is approver, use selected status. If normal user, defaults to 'Pending'
-      approvalStatus: isApprover
+      approvalStatus: isApproverActive
         ? formData.approvalStatus || 'Pending'
         : isEdit && editingTransaction
         ? editingTransaction.approvalStatus
         : 'Pending',
       approvedBy:
-        isApprover && formData.approvalStatus && formData.approvalStatus !== 'Pending'
-          ? currentUser?.email || AUTHORIZED_APPROVER_EMAIL
+        isApproverActive && formData.approvalStatus && formData.approvalStatus !== 'Pending'
+          ? AUTHORIZED_APPROVER_EMAIL
           : editingTransaction?.approvedBy,
       approvedAt:
-        isApprover && formData.approvalStatus && formData.approvalStatus !== 'Pending'
+        isApproverActive && formData.approvalStatus && formData.approvalStatus !== 'Pending'
           ? now
           : editingTransaction?.approvedAt,
       nilaiSebelum: formData.nilaiSebelum,
@@ -236,16 +260,16 @@ export default function App() {
 
   // Immediate approval change handler - STRICTLY RESTRICTED TO fatah.mubarokah@homecenter.co.id
   const handleApprovalChange = async (id: string, newStatus: ApprovalStatus) => {
-    if (!isAuthorizedApprover(currentUser?.email)) {
+    if (!isApproverActive) {
       addToast(
-        `Akses ditolak! Anda harus login menggunakan akun Google resmi: ${AUTHORIZED_APPROVER_EMAIL}`,
+        `Akses ditolak! Anda harus login/terverifikasi sebagai akun resmi: ${AUTHORIZED_APPROVER_EMAIL}`,
         'error'
       );
       return;
     }
 
     try {
-      await updateLiveTransactionApproval(id, newStatus, currentUser?.email || AUTHORIZED_APPROVER_EMAIL);
+      await updateLiveTransactionApproval(id, newStatus, AUTHORIZED_APPROVER_EMAIL);
       addToast(`Status approval berhasil diubah menjadi: ${newStatus} secara live`, 'success');
     } catch (err: unknown) {
       console.error('Error updating live approval:', err);
@@ -296,6 +320,8 @@ export default function App() {
           setIsModalFormOpen(true);
         }}
         currentUser={currentUser}
+        activeApproverEmail={activeApproverEmail}
+        onSetApproverEmail={handleSetApproverEmail}
         onToast={addToast}
         totalRecords={transactions.length}
       />
@@ -308,7 +334,7 @@ export default function App() {
             <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">
               <span>Commercial & Finance Control</span>
               <span>·</span>
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 text-emerald-700">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Live Realtime Cloud Database
               </span>
@@ -317,7 +343,7 @@ export default function App() {
               Monitoring Discount Faktur Pajak (FP) + Cashback (CB)
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-              Data tersinkronisasi secara langsung untuk seluruh sales & user. Hak akses approval khusus melalui login akun Google{' '}
+              Data tersinkronisasi secara langsung untuk seluruh sales & user. Hak akses approval khusus melalui akun{' '}
               <span className="font-semibold text-slate-800">{AUTHORIZED_APPROVER_EMAIL}</span>.
             </p>
           </div>
@@ -381,7 +407,7 @@ export default function App() {
                   setPreviewingTransaction(item);
                 }}
                 onExportExcel={handleExportExcel}
-                currentUserEmail={currentUser?.email || ''}
+                currentUserEmail={effectiveApproverEmail || ''}
                 onApprovalChange={handleApprovalChange}
                 onOpenCreateModal={() => {
                   setEditingTransaction(null);
@@ -397,7 +423,7 @@ export default function App() {
       <footer className="mt-auto border-t border-slate-200 bg-white py-5 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>
-            Portal Monitoring FP & CB © {new Date().getFullYear()} · Approver Google Auth:{' '}
+            Portal Monitoring FP & CB © {new Date().getFullYear()} · Approver:{' '}
             <span className="font-mono text-slate-700 font-semibold">{AUTHORIZED_APPROVER_EMAIL}</span>
           </span>
           <div className="flex items-center gap-4 text-[11px] text-slate-500">
@@ -421,7 +447,7 @@ export default function App() {
         onSubmit={handleSaveTransaction}
         editData={editingTransaction}
         salesDirectory={salesDirectory}
-        currentUserEmail={currentUser?.email || ''}
+        currentUserEmail={effectiveApproverEmail || ''}
       />
 
       <PhotoLightboxModal
