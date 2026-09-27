@@ -1,0 +1,6 @@
+{
+  "name": "Monitoring Faktur Pajak & Cashback (FP + CB)",
+  "description": "Dashboard monitoring dan pencatatan potongan Discount Faktur Pajak (FP) + Cashback (CB) sales ke customer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
