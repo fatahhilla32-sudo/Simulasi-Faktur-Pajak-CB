@@ -9,13 +9,14 @@ import {
   AUTHORIZED_APPROVER_EMAIL,
 } from './types';
 import {
-  getAllTransactions,
-  saveTransaction,
-  deleteTransaction,
-  updateTransactionApproval,
-  getSalesDirectory,
-  clearAllTransactions,
-} from './services/db';
+  subscribeToTransactions,
+  saveLiveTransaction,
+  deleteLiveTransaction,
+  updateLiveTransactionApproval,
+  auth,
+  isAuthorizedApprover,
+} from './services/firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { Navbar } from './components/Navbar';
 import { SummaryCards } from './components/SummaryCards';
 import { TransactionTable } from './components/TransactionTable';
@@ -24,27 +25,12 @@ import { PhotoLightboxModal } from './components/PhotoLightboxModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { ToastNotification } from './components/ToastNotification';
 import { exportTransactionsToExcel } from './utils/exportExcel';
-import { Plus } from 'lucide-react';
+import { Plus, Radio } from 'lucide-react';
 
 export default function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [salesDirectory, setSalesDirectory] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  // User identity: default to general user ("user.umum@homecenter.co.id"), or remembered preference
-  const [currentUserEmail, setCurrentUserEmail] = useState<string>(() => {
-    return localStorage.getItem('fpcb_current_user') || 'user.umum@homecenter.co.id';
-  });
-
-  const handleUserEmailChange = (newEmail: string) => {
-    setCurrentUserEmail(newEmail);
-    localStorage.setItem('fpcb_current_user', newEmail);
-    if (newEmail.trim().toLowerCase() === AUTHORIZED_APPROVER_EMAIL.toLowerCase()) {
-      addToast(`Akses Approver Aktif (${AUTHORIZED_APPROVER_EMAIL}). Anda memiliki hak akses approval.`, 'success');
-    } else {
-      addToast(`Mode User Umum aktif. Anda dapat menginput transaksi (Status approval hanya dapat diubah oleh approver).`, 'info');
-    }
-  };
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // Modals & Active items
   const [isModalFormOpen, setIsModalFormOpen] = useState<boolean>(false);
@@ -72,38 +58,49 @@ export default function App() {
 
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    }, 4500);
   }, []);
 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // Load initial data (clean empty state, clearing out any previous sample seed data)
-  const loadData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      // Clean previous dummy sample data as requested by the user
-      if (localStorage.getItem('fpcb_cleared_samples_v4') !== 'true') {
-        await clearAllTransactions();
-        localStorage.setItem('fpcb_cleared_samples_v4', 'true');
-      }
+  // 1. Listen for Google Auth state changes
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribeAuth();
+  }, []);
 
-      const items = await getAllTransactions();
-      setTransactions(items);
-      const dir = await getSalesDirectory();
-      setSalesDirectory(dir);
-    } catch (err) {
-      console.error('Failed to load data:', err);
-      addToast('Gagal memuat data dari database lokal.', 'error');
-    } finally {
-      setIsLoading(false);
-    }
+  // 2. Realtime Live Subscription to Firestore
+  useEffect(() => {
+    setIsLoading(true);
+    const unsubscribeLive = subscribeToTransactions(
+      (liveItems) => {
+        setTransactions(liveItems);
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error('Error connecting to live Firestore:', error);
+        addToast('Gagal menghubungkan ke database live Firestore.', 'error');
+        setIsLoading(false);
+      }
+    );
+
+    return () => unsubscribeLive();
   }, [addToast]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  // Dynamic Sales directory for auto-filling Nama Sales when NIP is typed
+  const salesDirectory = useMemo(() => {
+    const dir: Record<string, string> = {};
+    transactions.forEach((item) => {
+      if (item.nipSales?.trim() && item.namaSales?.trim()) {
+        dir[item.nipSales.trim()] = item.namaSales.trim();
+      }
+    });
+    return dir;
+  }, [transactions]);
 
   // Filtered transactions
   const filteredTransactions = useMemo(() => {
@@ -179,24 +176,23 @@ export default function App() {
     };
   }, [filteredTransactions]);
 
-  // Form Submit - CAN BE DONE BY ANYONE (USER UMUM / SALES)
+  // Form Submit - CAN BE DONE BY ANYONE (SALES / USER UMUM)
   const handleSaveTransaction = async (formData: TransactionFormData) => {
     const totalBenefit = formData.nilaiSebelum - formData.nilaiSesudah;
     const persenBenefit = formData.nilaiSebelum > 0 ? (totalBenefit / formData.nilaiSebelum) * 100 : 0;
     const now = Date.now();
 
-    const isApprover =
-      currentUserEmail.trim().toLowerCase() === AUTHORIZED_APPROVER_EMAIL.toLowerCase();
-
+    const isApprover = isAuthorizedApprover(currentUser?.email);
     const isEdit = Boolean(formData.id);
+
     const itemToSave: Transaction = {
-      id: formData.id || `trx-${now}`,
+      id: formData.id || `trx-${now}-${Math.random().toString(36).substring(2, 7)}`,
       tanggal: formData.tanggal,
       nipSales: formData.nipSales,
       namaSales: formData.namaSales,
       namaCustomer: formData.namaCustomer,
       jenisTransaksi: formData.jenisTransaksi || 'LUNAS',
-      // If creator is not approver, new records naturally start as Pending
+      // If creator is approver, use selected status. If normal user, defaults to 'Pending'
       approvalStatus: isApprover
         ? formData.approvalStatus || 'Pending'
         : isEdit && editingTransaction
@@ -204,7 +200,7 @@ export default function App() {
         : 'Pending',
       approvedBy:
         isApprover && formData.approvalStatus && formData.approvalStatus !== 'Pending'
-          ? AUTHORIZED_APPROVER_EMAIL
+          ? currentUser?.email || AUTHORIZED_APPROVER_EMAIL
           : editingTransaction?.approvedBy,
       approvedAt:
         isApprover && formData.approvalStatus && formData.approvalStatus !== 'Pending'
@@ -222,42 +218,39 @@ export default function App() {
       updatedAt: now,
     };
 
-    await saveTransaction(itemToSave);
-
-    // Refresh list
-    const updatedList = await getAllTransactions();
-    setTransactions(updatedList);
-
-    // Refresh sales directory for autocomplete
-    const dir = await getSalesDirectory();
-    setSalesDirectory(dir);
-
-    addToast(
-      isEdit
-        ? `Transaksi ${itemToSave.namaCustomer} berhasil diperbarui.`
-        : `Transaksi baru untuk ${itemToSave.namaCustomer} (${itemToSave.jenisTransaksi}) berhasil disimpan!`,
-      'success'
-    );
+    try {
+      await saveLiveTransaction(itemToSave);
+      addToast(
+        isEdit
+          ? `Transaksi ${itemToSave.namaCustomer} berhasil diperbarui secara live.`
+          : `Transaksi baru untuk ${itemToSave.namaCustomer} (${itemToSave.jenisTransaksi}) berhasil dikirim live!`,
+        'success'
+      );
+    } catch (err: unknown) {
+      console.error('Error saving live transaction:', err);
+      const msg = err instanceof Error ? err.message : 'Gagal menyimpan transaksi live.';
+      addToast(`Error simpan: ${msg}`, 'error');
+      throw err;
+    }
   };
 
-  // Immediate approval change handler - RESTRICTED STRICTLY TO fatah.mubarokah@homecenter.co.id
+  // Immediate approval change handler - STRICTLY RESTRICTED TO fatah.mubarokah@homecenter.co.id
   const handleApprovalChange = async (id: string, newStatus: ApprovalStatus) => {
-    if (currentUserEmail.trim().toLowerCase() !== AUTHORIZED_APPROVER_EMAIL.toLowerCase()) {
+    if (!isAuthorizedApprover(currentUser?.email)) {
       addToast(
-        `Akses ditolak! Hanya email ${AUTHORIZED_APPROVER_EMAIL} yang berhak melakukan approval transaksi.`,
+        `Akses ditolak! Anda harus login menggunakan akun Google resmi: ${AUTHORIZED_APPROVER_EMAIL}`,
         'error'
       );
       return;
     }
 
     try {
-      await updateTransactionApproval(id, newStatus, currentUserEmail);
-      const updatedList = await getAllTransactions();
-      setTransactions(updatedList);
-      addToast(`Status approval berhasil diubah menjadi: ${newStatus}`, 'success');
-    } catch (err) {
-      console.error(err);
-      addToast('Gagal mengubah status approval.', 'error');
+      await updateLiveTransactionApproval(id, newStatus, currentUser?.email || AUTHORIZED_APPROVER_EMAIL);
+      addToast(`Status approval berhasil diubah menjadi: ${newStatus} secara live`, 'success');
+    } catch (err: unknown) {
+      console.error('Error updating live approval:', err);
+      const msg = err instanceof Error ? err.message : 'Gagal memperbarui status approval.';
+      addToast(`Error update approval: ${msg}`, 'error');
     }
   };
 
@@ -265,16 +258,9 @@ export default function App() {
   const handleConfirmDelete = async (id: string) => {
     try {
       setIsDeleting(true);
-      await deleteTransaction(id);
-
-      const updatedList = await getAllTransactions();
-      setTransactions(updatedList);
-
-      const dir = await getSalesDirectory();
-      setSalesDirectory(dir);
-
+      await deleteLiveTransaction(id);
       setDeletingTransaction(null);
-      addToast('Data transaksi berhasil dihapus.', 'info');
+      addToast('Data transaksi berhasil dihapus dari cloud Firestore.', 'info');
     } catch (err) {
       console.error(err);
       addToast('Gagal menghapus data transaksi.', 'error');
@@ -301,27 +287,6 @@ export default function App() {
     }
   };
 
-  // Clear all data manually
-  const handleClearAllData = async () => {
-    const confirmClear = window.confirm(
-      'Apakah Anda yakin ingin menghapus seluruh data transaksi yang tersimpan di sistem?'
-    );
-    if (!confirmClear) return;
-
-    try {
-      setIsLoading(true);
-      await clearAllTransactions();
-      setTransactions([]);
-      setSalesDirectory({});
-      addToast('Seluruh data transaksi berhasil dikosongkan.', 'info');
-    } catch (err) {
-      console.error(err);
-      addToast('Gagal mengosongkan data transaksi.', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-blue-100 selection:text-blue-900">
       {/* Navigation Header */}
@@ -330,10 +295,9 @@ export default function App() {
           setEditingTransaction(null);
           setIsModalFormOpen(true);
         }}
-        onClearAllData={handleClearAllData}
+        currentUser={currentUser}
+        onToast={addToast}
         totalRecords={transactions.length}
-        currentUserEmail={currentUserEmail}
-        onUserEmailChange={handleUserEmailChange}
       />
 
       {/* Main Workspace Canvas */}
@@ -344,13 +308,16 @@ export default function App() {
             <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 uppercase tracking-wider mb-1">
               <span>Commercial & Finance Control</span>
               <span>·</span>
-              <span>Monitoring FP & Cashback</span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Live Realtime Cloud Database
+              </span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
               Monitoring Discount Faktur Pajak (FP) + Cashback (CB)
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-              Pencatatan terbuka untuk seluruh sales & user umum. Otorisasi persetujuan potongan nilai benefit khusus oleh{' '}
+              Data tersinkronisasi secara langsung untuk seluruh sales & user. Hak akses approval khusus melalui login akun Google{' '}
               <span className="font-semibold text-slate-800">{AUTHORIZED_APPROVER_EMAIL}</span>.
             </p>
           </div>
@@ -414,7 +381,7 @@ export default function App() {
                   setPreviewingTransaction(item);
                 }}
                 onExportExcel={handleExportExcel}
-                currentUserEmail={currentUserEmail}
+                currentUserEmail={currentUser?.email || ''}
                 onApprovalChange={handleApprovalChange}
                 onOpenCreateModal={() => {
                   setEditingTransaction(null);
@@ -430,11 +397,14 @@ export default function App() {
       <footer className="mt-auto border-t border-slate-200 bg-white py-5 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>
-            Portal Monitoring FP & CB © {new Date().getFullYear()} · Approver Resmi:{' '}
+            Portal Monitoring FP & CB © {new Date().getFullYear()} · Approver Google Auth:{' '}
             <span className="font-mono text-slate-700 font-semibold">{AUTHORIZED_APPROVER_EMAIL}</span>
           </span>
           <div className="flex items-center gap-4 text-[11px] text-slate-500">
-            <span>Penyimpanan Persisten Browser</span>
+            <span className="flex items-center gap-1 text-emerald-600 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Sinkronisasi Cloud Firestore Live
+            </span>
             <span>·</span>
             <span>Format Ekspor .xlsx</span>
           </div>
@@ -451,7 +421,7 @@ export default function App() {
         onSubmit={handleSaveTransaction}
         editData={editingTransaction}
         salesDirectory={salesDirectory}
-        currentUserEmail={currentUserEmail}
+        currentUserEmail={currentUser?.email || ''}
       />
 
       <PhotoLightboxModal

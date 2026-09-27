@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "transaksi": {
+      "title": "Transaksi FP dan Cashback",
+      "description": "Pencatatan pemotongan Faktur Pajak dan Cashback sales ke customer",
+      "type": "object",
+      "properties": {
+        "tanggal": { "type": "string", "description": "Tanggal transaksi YYYY-MM-DD" },
+        "nipSales": { "type": "string", "description": "NIP Sales" },
+        "namaSales": { "type": "string", "description": "Nama Sales" },
+        "namaCustomer": { "type": "string", "description": "Nama Customer" },
+        "jenisTransaksi": { "type": "string", "enum": ["DP", "LUNAS"], "description": "Jenis transaksi DP atau LUNAS" },
+        "approvalStatus": { "type": "string", "enum": ["Pending", "Approved", "Not Approved"], "description": "Status persetujuan" },
+        "approvedBy": { "type": "string", "description": "Email akun approver yang menyetujui" },
+        "approvedAt": { "type": "number", "description": "Timestamp persetujuan" },
+        "nilaiSebelum": { "type": "number", "description": "Nilai transaksi sebelum potongan FP+CB" },
+        "nilaiSesudah": { "type": "number", "description": "Nilai transaksi sesudah potongan FP+CB" },
+        "totalBenefit": { "type": "number", "description": "Total potongan benefit customer" },
+        "persenBenefit": { "type": "number", "description": "Persentase potongan benefit" },
+        "fotoData": { "type": "string", "description": "Data gambar base64 bukti faktur dan cashback" },
+        "fotoFileName": { "type": "string", "description": "Nama file foto bukti" },
+        "fotoFileSize": { "type": "number", "description": "Ukuran file foto bukti dalam bytes" },
+        "keterangan": { "type": "string", "description": "Catatan tambahan" },
+        "createdAt": { "type": "number", "description": "Timestamp pembuatan data" },
+        "updatedAt": { "type": "number", "description": "Timestamp pengubahan data" }
+      },
+      "required": [
+        "tanggal",
+        "nipSales",
+        "namaSales",
+        "namaCustomer",
+        "jenisTransaksi",
+        "nilaiSebelum",
+        "nilaiSesudah",
+        "totalBenefit",
+        "persenBenefit",
+        "fotoData"
+      ]
+    }
+  }
+}

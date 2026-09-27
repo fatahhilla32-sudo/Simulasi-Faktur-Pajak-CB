@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function for checking authorized approver email
+    function isApprover() {
+      return request.auth != null &&
+        request.auth.token.email != null &&
+        request.auth.token.email.lower() == 'fatah.mubarokah@homecenter.co.id';
+    }
+
+    match /transaksi/{transaksiId} {
+      // Live realtime viewing is open to all users
+      allow read: if true;
+
+      // Anyone (sales/umum) can create new transaction records
+      allow create: if request.resource.data.tanggal is string &&
+        request.resource.data.nipSales is string &&
+        request.resource.data.namaCustomer is string;
+
+      // Updating approvalStatus is strictly restricted to fatah.mubarokah@homecenter.co.id
+      allow update: if (request.resource.data.diff(resource.data).affectedKeys().hasAny(['approvalStatus', 'approvedBy', 'approvedAt']) == false) || isApprover();
+
+      // Delete allowed
+      allow delete: if true;
+    }
+  }
+}
